@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Looksmaxing Analyzer</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #0f172a;
+        color: #e5e7eb;
+        padding: 20px;
+    }
+    h1 {
+        color: #38bdf8;
+    }
+    .container {
+        max-width: 800px;
+        margin: auto;
+    }
+    .card {
+        background: #020617;
+        padding: 20px;
+        border-radius: 12px;
+        margin-top: 20px;
+    }
+    img {
+        max-width: 100%;
+        border-radius: 12px;
+        margin-top: 10px;
+    }
+    button {
+        background: #38bdf8;
+        color: #020617;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+    button:hover {
+        background: #0ea5e9;
+    }
+    .report {
+        margin-top: 15px;
+        background: #020617;
+        padding: 15px;
+        border-radius: 10px;
+        line-height: 1.6;
+    }
+    .tier {
+        font-weight: bold;
+        color: #22c55e;
+    }
+</style>
+</head>
+
+<body>
+<div class="container">
+    <h1>Looksmaxing Image Analyzer</h1>
+    <p>Upload an image to generate a structured looksmaxing-style report.</p>
+
+    <input type="file" accept="image/*" id="imageInput">
+    
+    <div class="card">
+        <img id="preview" hidden>
+        <button onclick="analyzeImage()">Analyze</button>
+
+        <div id="output" class="report"></div>
+    </div>
+</div>
+
+<script>
+const preview = document.getElementById("preview");
+const imageInput = document.getElementById("imageInput");
+const output = document.getElementById("output");
+
+imageInput.addEventListener("change", () => {
+    const file = imageInput.files[0];
+    if (!file) return;
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
+    output.innerHTML = "";
+});
+
+function analyzeImage() {
+    if (!preview.src) {
+        output.innerHTML = "Please upload an image first.";
+        return;
+    }
+
+    // Placeholder logic (honest & extendable)
+    const tiers = ["LTN", "MTN", "HTN"];
+    const tier = tiers[Math.floor(Math.random() * tiers.length)];
+
+    output.innerHTML = `
+        <h3>Looksmaxing Assessment</h3>
+        <p><span class="tier">Tier:</span> ${tier}</p>
+        <p><strong>Facial Harmony:</strong> Moderate balance, no extreme asymmetry.</p>
+        <p><strong>Jawline:</strong> Average definition; fat loss or grooming can improve.</p>
+        <p><strong>Midface:</strong> Proportional, not recessed.</p>
+        <p><strong>Overall Impression:</strong> Socially acceptable to above average. Styling, fitness, and expression matter more than bone structure alone.</p>
+        <p><em>Note:</em> This is a structural placeholder. Real accuracy requires ML-based facial analysis.</p>
+    `;
+}
+</script>
+</body>
+</html>
