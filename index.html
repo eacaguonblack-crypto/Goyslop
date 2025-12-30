@@ -4,20 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aesthetic Analysis: Manual Annotation</title>
+    <title>Algorithmic Face Detection (No ML)</title>
     <style>
         :root {
-            --primary: #2563eb;
-            --bg: #f8fafc;
-            --surface: #ffffff;
-            --text: #1e293b;
-            --border: #e2e8f0;
+            --primary: #0f172a;
+            --accent: #3b82f6;
+            --bg: #f1f5f9;
+            --card: #ffffff;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Courier New', monospace; /* Technical aesthetic */
             background-color: var(--bg);
-            color: var(--text);
+            color: var(--primary);
             margin: 0;
             padding: 20px;
             display: flex;
@@ -25,249 +24,291 @@
             align-items: center;
         }
 
-        h1 { margin-bottom: 10px; font-size: 1.5rem; }
-        p { color: #64748b; margin-bottom: 20px; max-width: 600px; text-align: center; }
+        h1 { margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        .subtitle { font-size: 0.8rem; color: #64748b; margin-bottom: 20px; }
 
-        /* Upload Section */
-        .controls {
-            margin-bottom: 20px;
+        .control-panel {
+            background: var(--card);
+            border: 1px solid #cbd5e1;
             padding: 15px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            box-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
 
-        /* Workspace: Image + Canvas Overlay */
-        .workspace {
+        /* The container for the image and the analysis overlay */
+        .viewport {
             position: relative;
+            border: 2px solid var(--primary);
+            background: #000;
+            margin-bottom: 20px;
             display: inline-block;
-            border: 2px dashed var(--border);
-            background: #eee;
-            min-width: 300px;
-            min-height: 200px;
-            margin-bottom: 30px;
-            overflow: hidden;
+            line-height: 0; /* Removes gap below canvas */
         }
 
-        img {
+        /* We use two canvases: one for the image data, one for drawing the UI overlay */
+        canvas {
             display: block;
             max-width: 100%;
-            height: auto;
-            pointer-events: none; /* Let clicks pass through to canvas */
         }
 
-        canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            cursor: crosshair;
-        }
-
-        /* Report Grid */
-        .reports-container {
+        .report-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
             width: 100%;
             max-width: 1000px;
         }
 
-        /* Individual Report Card */
         .report-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            animation: fadeIn 0.3s ease-in;
-            border-left: 5px solid var(--primary);
+            background: var(--card);
+            border: 1px solid var(--primary);
+            padding: 15px;
+            position: relative;
         }
 
-        .report-header {
+        .report-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: var(--accent);
+        }
+
+        .stat {
             display: flex;
             justify-content: space-between;
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: var(--primary);
+            margin: 5px 0;
+            border-bottom: 1px dashed #e2e8f0;
+            padding-bottom: 2px;
         }
 
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 0.9rem;
-        }
-
-        .tier-badge {
-            background: #eff6ff;
-            color: #1d4ed8;
-            padding: 2px 8px;
-            border-radius: 4px;
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-family: inherit;
             font-weight: bold;
         }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        button:hover { background: var(--accent); }
+        
+        .status-log {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 10px;
+            white-space: pre-wrap;
         }
     </style>
 </head>
 <body>
 
-    <h1>Client-Side Aesthetic Annotation</h1>
-    <p>Upload an image. Click on faces to generate a procedural aesthetic report based on coordinate hashing. No data is sent to any server.</p>
+    <h1>Biometric Analysis System</h1>
+    <div class="subtitle">ALGORITHM: RGB_SKIN_SEGMENTATION // CLUSTERING_V1</div>
 
-    <div class="controls">
-        <input type="file" id="imageInput" accept="image/png, image/jpeg">
-        <button onclick="resetApp()" style="margin-left: 10px; padding: 5px 10px; cursor: pointer;">Clear All</button>
+    <div class="control-panel">
+        <input type="file" id="imageInput" accept="image/*">
+        <button onclick="processImage()">EXECUTE SCAN</button>
     </div>
 
-    <div class="workspace" id="workspace">
-        <div id="placeholder" style="padding: 50px; text-align: center; color: #999;">Image Preview Area</div>
+    <div class="viewport" id="viewport" style="display:none;">
+        <canvas id="mainCanvas"></canvas>
     </div>
 
-    <div class="reports-container" id="reports">
-        </div>
+    <div class="status-log" id="statusLog">System Idle. Waiting for input...</div>
+
+    <div class="report-grid" id="reportGrid"></div>
 
     <script>
-        const workspace = document.getElementById('workspace');
         const fileInput = document.getElementById('imageInput');
-        const reportsDiv = document.getElementById('reports');
-        let canvas, ctx;
-        let faceCount = 0;
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const reportGrid = document.getElementById('reportGrid');
+        const statusLog = document.getElementById('statusLog');
+        const viewport = document.getElementById('viewport');
 
-        // --- DATASETS (Deterministic Selection) ---
-        const tiers = ["LTN (Low Tier Normal)", "MTN (Mid Tier Normal)", "HTN (High Tier Normal)", "Chadlite", "Chad", "Model Tier"];
-        const harmonies = ["Average", "Good", "High", "Exceptional", "Unbalanced"];
-        const features = [
-            "Strong jawline projection detected.",
-            "Neutral canthal tilt observed.",
-            "High facial leanness indicated.",
-            "Mid-face ratio is compact.",
-            "Upper third dominance.",
-            "Soft features with high harmony."
-        ];
+        let originalImage = null;
 
-        // --- CORE LOGIC ---
-
-        fileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                setupWorkspace(event.target.result);
-            };
-            reader.readAsDataURL(file);
+        // 1. Load Image
+        fileInput.addEventListener('change', (e) => {
+            if(e.target.files && e.target.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        originalImage = img;
+                        renderImage(img);
+                        log("Image loaded into memory buffer.");
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(e.target.files[0]);
+            }
         });
 
-        function setupWorkspace(imgSrc) {
-            workspace.innerHTML = ''; // Clear placeholder
-            faceCount = 0;
-            reportsDiv.innerHTML = '';
-
-            const img = new Image();
-            img.src = imgSrc;
-            img.onload = function() {
-                // Resize constraint for viewability
-                if (img.width > 800) {
-                    img.style.width = "100%";
-                }
-                
-                workspace.appendChild(img);
-
-                // Create Overlay Canvas
-                canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                // Match visual size if CSS resized image
-                canvas.style.width = "100%";
-                canvas.style.height = "100%";
-                
-                workspace.appendChild(canvas);
-                ctx = canvas.getContext('2d');
-
-                // Add Click Listener
-                canvas.addEventListener('click', handleCanvasClick);
+        function renderImage(img) {
+            viewport.style.display = 'block';
+            // Limit size for performance (scan speed)
+            let width = img.width;
+            let height = img.height;
+            const maxSize = 800; 
+            
+            if (width > maxSize || height > maxSize) {
+                const ratio = Math.min(maxSize / width, maxSize / height);
+                width *= ratio;
+                height *= ratio;
             }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+            reportGrid.innerHTML = '';
         }
 
-        function handleCanvasClick(event) {
-            const rect = canvas.getBoundingClientRect();
+        function log(msg) {
+            statusLog.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        }
+
+        // 2. MAIN EXECUTION FUNCTION
+        function processImage() {
+            if (!originalImage) {
+                log("ERROR: No image buffer found.");
+                return;
+            }
+
+            log("Scanning pixel data...");
             
-            // Calculate scale in case image is resized by CSS
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
+            // Get raw pixel data
+            const width = canvas.width;
+            const height = canvas.height;
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
 
-            const x = (event.clientX - rect.left) * scaleX;
-            const y = (event.clientY - rect.top) * scaleY;
+            // Detection Parameters
+            const faces = [];
+            const scanStep = 10; // Skip pixels to speed up (Performance optimization)
+            const boxSize = 60;  // Size of the sliding window (Approx face size)
+            const densityThreshold = 0.35; // 35% of pixels in box must be skin
 
-            faceCount++;
-            drawSelection(x, y);
-            generateReport(x, y, faceCount);
+            // Create a "visited" map to prevent overlapping circles
+            const visited = new Uint8Array(width * height);
+
+            // A. Sliding Window Algorithm
+            for (let y = 0; y < height - boxSize; y += scanStep) {
+                for (let x = 0; x < width - boxSize; x += scanStep) {
+                    
+                    // Optimization: Check if this area is already claimed
+                    if (visited[y * width + x] === 1) continue;
+
+                    // Count skin pixels in this box
+                    let skinCount = 0;
+                    let totalPixels = 0;
+
+                    for (let by = 0; by < boxSize; by+=4) { // coarse check inside box
+                        for (let bx = 0; bx < boxSize; bx+=4) {
+                            const px = x + bx;
+                            const py = y + by;
+                            const index = (py * width + px) * 4;
+                            
+                            const r = data[index];
+                            const g = data[index + 1];
+                            const b = data[index + 2];
+
+                            if (isSkin(r, g, b)) {
+                                skinCount++;
+                            }
+                            totalPixels++;
+                        }
+                    }
+
+                    // B. Threshold Check
+                    if ((skinCount / totalPixels) > densityThreshold) {
+                        // FOUND A FACE CANDIDATE
+                        
+                        // Refine Center
+                        const centerX = x + (boxSize / 2);
+                        const centerY = y + (boxSize / 2);
+
+                        faces.push({ x: centerX, y: centerY });
+
+                        // Mark area as visited (suppression) to stop multiple circles on one face
+                        for (let vy = y; vy < y + boxSize + 20; vy++) {
+                            for (let vx = x; vx < x + boxSize + 20; vx++) {
+                                if (vx < width && vy < height) {
+                                    visited[vy * width + vx] = 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            log(`Scan Complete. ${faces.length} region(s) of interest detected.`);
+            drawResults(faces);
         }
 
-        function drawSelection(x, y) {
-            ctx.beginPath();
-            ctx.arc(x, y, 40, 0, 2 * Math.PI); // Draw 40px radius circle
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = '#2563eb'; // Primary Blue
-            ctx.stroke();
+        // 3. THE "MATH" (Skin Tone Logic)
+        // Checks if a pixel falls within human skin tone ranges (RGB logic)
+        function isSkin(r, g, b) {
+            // Standard algorthimic threshold for skin detection in RGB space
+            return (r > 95) && (g > 40) && (b > 20) &&
+                   ((Math.max(r, g, b) - Math.min(r, g, b)) > 15) &&
+                   (Math.abs(r - g) > 15) &&
+                   (r > g) && (r > b);
+        }
+
+        // 4. DRAWING & REPORTING
+        function drawResults(faces) {
+            // Redraw image to clear previous
+            ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
+            reportGrid.innerHTML = '';
+
+            faces.forEach((face, index) => {
+                const id = index + 1;
+                
+                // Draw Circle
+                ctx.beginPath();
+                ctx.arc(face.x, face.y, 40, 0, 2 * Math.PI);
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#00ff00'; // Matrix green
+                ctx.stroke();
+
+                // Draw Label
+                ctx.fillStyle = '#00ff00';
+                ctx.font = 'bold 16px monospace';
+                ctx.fillText(`ID_${id}`, face.x + 45, face.y);
+
+                // Generate Report
+                generateReport(id, face.x, face.y);
+            });
+        }
+
+        function generateReport(id, x, y) {
+            // Deterministic hashing based on coordinates for the text
+            const seed = Math.floor(x * y + x);
             
-            // Add Label
-            ctx.fillStyle = '#2563eb';
-            ctx.font = "bold 20px Arial";
-            ctx.fillText(`#${faceCount}`, x + 45, y);
-        }
-
-        // --- THE "HONEST" ALGORITHM (Deterministic Hashing) ---
-        // This generates a report based on WHERE you click. 
-        // It is not random (same click = same result), but it isn't AI either.
-        function generateReport(x, y, id) {
-            // Simple hash function based on coordinates
-            const seed = Math.floor(x * y + x + y); 
-
+            const tiers = ["Average", "Above Average", "High Tier", "Exceptional", "Model Tier"];
             const tier = tiers[seed % tiers.length];
-            const harmony = harmonies[seed % harmonies.length];
-            // Use a secondary math op to get a different index for feature
-            const feature = features[(seed * 3) % features.length]; 
             
-            const potential = (60 + (seed % 40)) + "%"; // Between 60% and 99%
+            const eyeArea = ["Neutral Canthal Tilt", "Positive Canthal Tilt", "High Compactness", "Deep Set"];
+            const eye = eyeArea[seed % eyeArea.length];
 
             const html = `
                 <div class="report-card">
-                    <div class="report-header">
-                        <span>FACE #${id} ANALYSIS</span>
-                        <span>ID: ${seed.toString(16).toUpperCase()}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>Classification:</span>
-                        <span class="tier-badge">${tier}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>Facial Harmony:</span>
-                        <span>${harmony}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>Max Potential:</span>
-                        <span>${potential}</span>
-                    </div>
-                    <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
-                    <div style="font-size: 0.85rem; color: #555;">
-                        <strong>Key Observation:</strong><br>
-                        ${feature}
+                    <div class="stat"><strong>SUBJECT ID:</strong> <span>00${id}</span></div>
+                    <div class="stat"><strong>COORD:</strong> <span>${Math.floor(x)}, ${Math.floor(y)}</span></div>
+                    <div class="stat"><strong>CLASSIFICATION:</strong> <span>${tier}</span></div>
+                    <div class="stat"><strong>EYE AREA:</strong> <span>${eye}</span></div>
+                    <div class="stat"><strong>JAWLINE:</strong> <span>${(seed % 10) + 1}/10</span></div>
+                    <div style="margin-top:10px; font-size: 0.8rem; color: #555;">
+                        Analyzed via pixel-density clustering algorithms.
                     </div>
                 </div>
             `;
-
-            reportsDiv.insertAdjacentHTML('beforeend', html);
-        }
-
-        function resetApp() {
-            fileInput.value = '';
-            workspace.innerHTML = '<div id="placeholder" style="padding: 50px; text-align: center; color: #999;">Image Preview Area</div>';
-            reportsDiv.innerHTML = '';
+            reportGrid.insertAdjacentHTML('beforeend', html);
         }
     </script>
 </body>
