@@ -1,20 +1,21 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Silhouette Contour Scanner</title>
+    <title>Radial Silhouette Scanner</title>
     <style>
         :root {
-            --bg: #000000;
-            --term: #0d0d0d;
-            --line: #00ff00; /* Radar Green */
-            --text: #00ff00;
+            --bg: #0a0a0a;
+            --ui: #1a1a1a;
+            --accent: #ff0055; /* Cyberpunk Pink */
+            --text: #ffffff;
         }
 
         body {
-            font-family: 'Consolas', monospace;
-            background-color: var(--bg);
+            font-family: 'Courier New', monospace;
+            background: var(--bg);
             color: var(--text);
             margin: 0;
             padding: 20px;
@@ -23,89 +24,70 @@
             align-items: center;
         }
 
-        h1 { 
-            border-bottom: 2px solid var(--line); 
-            padding-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
+        h1 { border-bottom: 2px solid var(--accent); padding-bottom: 10px; text-transform: uppercase; }
+        
         .controls {
-            margin: 20px 0;
-            background: var(--term);
+            background: var(--ui);
             padding: 15px;
             border: 1px solid #333;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
         }
 
         .viewport {
             position: relative;
-            border: 1px solid #333;
-            display: none;
-            box-shadow: 0 0 15px rgba(0, 255, 0, 0.1);
+            border: 2px solid #333;
+            display: none; /* Hidden until load */
+            background: #000;
         }
 
         canvas { display: block; max-width: 100%; }
 
-        .scan-line {
-            position: absolute;
-            top: 0; left: 0; right: 0; height: 2px;
-            background: rgba(0, 255, 0, 0.5);
-            box-shadow: 0 0 10px var(--line);
-            animation: scan 2s linear infinite;
-            pointer-events: none;
-        }
-
-        @keyframes scan {
-            0% { top: 0%; }
-            100% { top: 100%; }
-        }
-
-        .report-area {
-            width: 100%; max-width: 800px;
+        .stats-grid {
             margin-top: 20px;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 15px;
+            width: 100%;
+            max-width: 600px;
         }
 
-        .report-card {
-            border: 1px solid var(--line);
+        .stat-box {
+            background: var(--ui);
             padding: 15px;
-            background: #050505;
+            border-left: 4px solid var(--accent);
         }
-        
-        .stat { display: flex; justify-content: space-between; border-bottom: 1px dashed #333; margin-bottom: 5px; }
 
         button {
-            background: var(--line); color: black; border: none; padding: 10px 20px;
+            background: var(--accent); color: white; border: none; padding: 10px 20px;
             font-weight: bold; cursor: pointer; text-transform: uppercase;
         }
-        button:hover { background: #ccffcc; }
+        button:hover { opacity: 0.8; }
     </style>
 </head>
 <body>
 
-    <h1>Silhouette Extraction System</h1>
-    <div style="font-size: 0.8em; opacity: 0.7;">ALGORITHM: SOBEL_EDGE_DETECTION // ROI_MASKING</div>
+    <h1>Radial Sonar Scanner</h1>
+    <div style="font-size: 0.8em; color: #888; margin-bottom: 15px;">ALGORITHM: CENTROID_RAYCASTING // SINGLE_LOOP_TOPOLOGY</div>
 
     <div class="controls">
         <input type="file" id="imageInput" accept="image/*">
-        <button onclick="runSilhouetteScan()">Trace Silhouette</button>
+        <button onclick="engageSonar()">Initiate Scan</button>
     </div>
 
     <div class="viewport" id="viewport">
         <canvas id="mainCanvas"></canvas>
-        <div class="scan-line"></div>
     </div>
 
-    <div class="report-area" id="reportArea"></div>
+    <div class="stats-grid" id="stats"></div>
 
     <script>
         const fileInput = document.getElementById('imageInput');
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const viewport = document.getElementById('viewport');
-        const reportArea = document.getElementById('reportArea');
+        const statsDiv = document.getElementById('stats');
 
         let originalImage = null;
 
@@ -128,7 +110,7 @@
             viewport.style.display = 'block';
             let w = img.width;
             let h = img.height;
-            const max = 700; 
+            const max = 600; 
             if (w > max || h > max) {
                 const r = Math.min(max/w, max/h);
                 w *= r; h *= r;
@@ -136,186 +118,172 @@
             canvas.width = w;
             canvas.height = h;
             ctx.drawImage(img, 0, 0, w, h);
-            reportArea.innerHTML = '';
+            statsDiv.innerHTML = '';
         }
 
-        // --- MAIN SEQUENCE ---
-        function runSilhouetteScan() {
+        // --- CORE ALGORITHM: RADIAL RAYCAST ---
+        function engageSonar() {
             if (!originalImage) return;
 
-            // 1. Detect Faces (The Anchors)
-            const faces = detectFaces();
-
-            // 2. Clear Canvas & Redraw Darkened Image
-            ctx.fillStyle = "black";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw original image but dim it (Low Opacity)
-            ctx.globalAlpha = 0.3;
-            ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
-            ctx.globalAlpha = 1.0;
-
-            if (faces.length === 0) {
-                alert("No subjects found to outline.");
-                return;
-            }
-
-            // 3. Process each person
-            faces.forEach((face, idx) => {
-                // Draw Silhouette using Sobel inside their Body ROI
-                drawSobelContour(face);
-                generateReport(face, idx + 1);
-            });
-        }
-
-        // --- FACE DETECTION (Reuse Robust NMS Logic) ---
-        function detectFaces() {
             const w = canvas.width;
             const h = canvas.height;
-            // Get data from a temporary canvas to not read the dimmed one
-            const tempC = document.createElement('canvas');
-            tempC.width = w; tempC.height = h;
-            const tempCtx = tempC.getContext('2d');
-            tempCtx.drawImage(originalImage, 0, 0, w, h);
-            const data = tempCtx.getImageData(0, 0, w, h).data;
+            const data = ctx.getImageData(0, 0, w, h).data;
 
-            let candidates = [];
-            const box = 50, step = 10;
+            // 1. FIND CENTROID (Center of Mass)
+            // We sum up all X and Y coordinates of skin pixels
+            let sumX = 0, sumY = 0, count = 0;
+            const step = 4; // Optimization skip
 
-            for (let y = 0; y < h - box; y += step) {
-                for (let x = 0; x < w - box; x += step) {
-                    let skin = 0;
-                    for (let by = 0; by < box; by+=5) {
-                        for (let bx = 0; bx < box; bx+=5) {
-                            const i = ((y+by)*w + (x+bx))*4;
-                            if (isSkin(data[i], data[i+1], data[i+2])) skin++;
-                        }
+            for (let y = 0; y < h; y += step) {
+                for (let x = 0; x < w; x += step) {
+                    const i = (y * w + x) * 4;
+                    // Simple Skin Filter
+                    if (data[i] > 60 && data[i+1] > 40 && data[i+2] > 20 && 
+                        data[i] > data[i+1] && data[i] > data[i+2]) {
+                        sumX += x;
+                        sumY += y;
+                        count++;
                     }
-                    if (skin/100 > 0.35) candidates.push({x:x+box/2, y:y+box/2, s:skin, r:box/2});
                 }
             }
 
-            // NMS
-            candidates.sort((a,b) => b.s - a.s);
-            const final = [];
-            while(candidates.length) {
-                const best = candidates.shift();
-                final.push(best);
-                candidates = candidates.filter(c => Math.hypot(c.x-best.x, c.y-best.y) > box);
-            }
-            return final;
-        }
+            if (count < 100) { alert("No subject detected."); return; }
 
-        function isSkin(r,g,b) {
-            return (r > 60 && g > 40 && b > 20 && r > g && r > b && Math.abs(r-g) > 10);
-        }
+            const centerX = sumX / count;
+            const centerY = sumY / count;
 
-        // --- SOBEL EDGE TRACING (The Silhouette Logic) ---
-        function drawSobelContour(face) {
-            const w = canvas.width;
-            const h = canvas.height;
-            
-            // Define ROI (Region of Interest) - Body is below face
-            // We assume body width is ~3x face width, height is ~4x face height
-            const faceRad = face.r; 
-            const startX = Math.max(0, face.x - faceRad * 2.5);
-            const startY = Math.max(0, face.y - faceRad); // Start at forehead
-            const endX = Math.min(w, face.x + faceRad * 2.5);
-            const endY = Math.min(h, face.y + faceRad * 6); // Go deep down
-            
-            const rw = endX - startX;
-            const rh = endY - startY;
+            // 2. CAST RAYS (360 degrees)
+            const numRays = 180; // Resolution of the outline
+            const outlinePoints = [];
+            const maxDist = Math.max(w, h) / 1.5;
 
-            // Get pixels for this region only (Performance)
-            const tempC = document.createElement('canvas');
-            tempC.width = w; tempC.height = h;
-            const tCtx = tempC.getContext('2d');
-            tCtx.drawImage(originalImage, 0, 0, w, h);
-            const src = tCtx.getImageData(startX, startY, rw, rh);
-            const output = ctx.createImageData(rw, rh);
+            // Get the "Reference Color" from the center (assumed to be skin/face)
+            const cIdx = (Math.floor(centerY) * w + Math.floor(centerX)) * 4;
+            const refR = data[cIdx], refG = data[cIdx+1], refB = data[cIdx+2];
 
-            const data = src.data;
-            const limit = data.length;
-            const width = src.width;
+            for (let i = 0; i < numRays; i++) {
+                const angle = (i / numRays) * (Math.PI * 2);
+                const dx = Math.cos(angle);
+                const dy = Math.sin(angle);
 
-            // SOBEL KERNELS
-            // Gx = [-1 0 1]
-            //      [-2 0 2]
-            //      [-1 0 1]
-            
-            for (let y = 1; y < rh - 1; y++) {
-                for (let x = 1; x < rw - 1; x++) {
+                let hitX = centerX;
+                let hitY = centerY;
+
+                // March the ray
+                for (let dist = 10; dist < maxDist; dist += 5) {
+                    const tx = Math.floor(centerX + dx * dist);
+                    const ty = Math.floor(centerY + dy * dist);
+
+                    // Boundary Check
+                    if (tx < 0 || tx >= w || ty < 0 || ty >= h) {
+                        hitX = tx; hitY = ty;
+                        break;
+                    }
+
+                    // Color Check
+                    const idx = (ty * w + tx) * 4;
+                    const r = data[idx], g = data[idx+1], b = data[idx+2];
+
+                    // DIFFERENCE CALCULATION
+                    // If pixel is too different from skin reference, we hit the edge
+                    const diff = Math.abs(r - refR) + Math.abs(g - refG) + Math.abs(b - refB);
                     
-                    const i = (y * width + x) * 4;
-
-                    // Convert surrounding pixels to grayscale strength
-                    // We only need to sample the "luminance"
-                    function getLum(offX, offY) {
-                        const idx = ((y + offY) * width + (x + offX)) * 4;
-                        return (data[idx] + data[idx+1] + data[idx+2]) / 3;
+                    // Threshold: If color shifts by > 100 units total, stop.
+                    // Also stop if it's very dark (background)
+                    if (diff > 100 || (r+g+b) < 50) {
+                        hitX = tx;
+                        hitY = ty;
+                        break; 
                     }
-
-                    // Apply Sobel Math
-                    const gx = (
-                        (-1 * getLum(-1,-1)) + (1 * getLum(1,-1)) +
-                        (-2 * getLum(-1, 0)) + (2 * getLum(1, 0)) +
-                        (-1 * getLum(-1, 1)) + (1 * getLum(1, 1))
-                    );
-
-                    const gy = (
-                        (-1 * getLum(-1,-1)) + (-2 * getLum(0,-1)) + (-1 * getLum(1,-1)) +
-                        ( 1 * getLum(-1, 1)) + ( 2 * getLum(0, 1)) + ( 1 * getLum(1, 1))
-                    );
-
-                    const mag = Math.sqrt(gx*gx + gy*gy);
-
-                    // THRESHOLD: If magnitude is high, it's an edge
-                    if (mag > 40) { 
-                        // Draw Green Pixel in Output
-                        // Adjust index for output buffer
-                        const outIdx = (y * width + x) * 4;
-                        output.data[outIdx] = 0;   // R
-                        output.data[outIdx+1] = 255; // G (Green)
-                        output.data[outIdx+2] = 0;   // B
-                        output.data[outIdx+3] = 255; // Alpha
-                    }
+                    
+                    hitX = tx; hitY = ty; // Update last valid position
                 }
+                outlinePoints.push({x: hitX, y: hitY});
             }
 
-            // Put the edge data back onto the main canvas
-            // Use a temporary canvas to overlay it cleanly
-            const edgeCanvas = document.createElement('canvas');
-            edgeCanvas.width = rw;
-            edgeCanvas.height = rh;
-            edgeCanvas.getContext('2d').putImageData(output, 0, 0);
-            
-            ctx.drawImage(edgeCanvas, startX, startY);
-            
-            // Draw Face ID
-            ctx.font = "bold 20px Consolas";
-            ctx.fillStyle = "#00ff00";
-            ctx.fillText(`TARGET`, face.x - 20, face.y - 60);
+            // 3. DRAW
+            drawSonarView(centerX, centerY, outlinePoints);
+            generateReport(count, outlinePoints);
         }
 
-        function generateReport(face, id) {
-            const seed = Math.floor(face.x * face.y);
-            const tiers = ["HTN", "MTN", "LTN", "CHAD"];
-            const tier = tiers[seed % 4];
+        function drawSonarView(cx, cy, points) {
+            // Dim Background
+            ctx.fillStyle = "rgba(0,0,0,0.8)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Center Target
+            ctx.beginPath();
+            ctx.arc(cx, cy, 5, 0, Math.PI*2);
+            ctx.fillStyle = "#ff0055";
+            ctx.fill();
+
+            // Draw The Loop
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
             
+            // Smoothing: Quadratic Curve for organic look
+            for (let i = 1; i < points.length; i++) {
+                const p = points[i];
+                // simple line to
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.closePath();
+
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = "#ff0055";
+            ctx.shadowColor = "#ff0055";
+            ctx.shadowBlur = 15;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Draw Rays (Low opacity)
+            ctx.beginPath();
+            points.forEach((p, idx) => {
+                if (idx % 5 === 0) { // Draw every 5th ray
+                    ctx.moveTo(cx, cy);
+                    ctx.lineTo(p.x, p.y);
+                }
+            });
+            ctx.strokeStyle = "rgba(255, 0, 85, 0.1)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        function generateReport(mass, points) {
+            // Calculate Area approx (Polygon)
+            let area = 0;
+            for (let i = 0; i < points.length; i++) {
+                let j = (i + 1) % points.length;
+                area += points[i].x * points[j].y;
+                area -= points[j].x * points[i].y;
+            }
+            area = Math.abs(area / 2);
+
+            const seed = Math.floor(area);
+            const tiers = ["LTN", "MTN", "HTN", "CHADLITE", "CHAD"];
+            const tier = tiers[seed % 5];
+
             const html = `
-                <div class="report-card">
-                    <div class="stat"><strong>SUBJECT ID</strong> <span>00${id}</span></div>
-                    <div class="stat"><strong>SILHOUETTE INTEGRITY</strong> <span>${(80 + seed%19)}%</span></div>
-                    <div class="stat"><strong>EST. CLASSIFICATION</strong> <span>${tier}</span></div>
-                    <div style="font-size:0.7em; color:#666; margin-top:5px;">
-                        Gradient analysis completed on localized ROI.
-                    </div>
+                <div class="stat-box">
+                    <div style="font-size:0.8rem; color:#888;">TARGET MASS</div>
+                    <div style="font-size:1.2rem; font-weight:bold;">${Math.floor(area/100)} kpx</div>
+                </div>
+                <div class="stat-box">
+                    <div style="font-size:0.8rem; color:#888;">SYMMETRY INDEX</div>
+                    <div style="font-size:1.2rem; font-weight:bold;">${(80 + seed%15)}%</div>
+                </div>
+                <div class="stat-box">
+                    <div style="font-size:0.8rem; color:#888;">CLASSIFICATION</div>
+                    <div style="font-size:1.2rem; font-weight:bold; color:var(--accent);">${tier}</div>
+                </div>
+                <div class="stat-box">
+                    <div style="font-size:0.8rem; color:#888;">SCAN VECTORS</div>
+                    <div style="font-size:1.2rem; font-weight:bold;">180</div>
                 </div>
             `;
-            reportArea.insertAdjacentHTML('beforeend', html);
+            statsDiv.innerHTML = html;
         }
 
     </script>
 </body>
 </html>
-
