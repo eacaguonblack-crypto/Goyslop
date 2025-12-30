@@ -1,95 +1,133 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Radial Silhouette Scanner</title>
+    <title>Integral Profile Scanner</title>
     <style>
         :root {
-            --bg: #0a0a0a;
-            --ui: #1a1a1a;
-            --accent: #ff0055; /* Cyberpunk Pink */
-            --text: #ffffff;
+            --bg: #000510;
+            --grid: #0a1a2f;
+            --cyan: #00f3ff;
+            --text: #a8b2d1;
         }
 
         body {
-            font-family: 'Courier New', monospace;
-            background: var(--bg);
+            font-family: 'Segoe UI', 'Roboto Mono', monospace;
+            background-color: var(--bg);
+            background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+            linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+            background-size: 40px 40px;
             color: var(--text);
             margin: 0;
             padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
+            height: 100vh;
         }
 
-        h1 { border-bottom: 2px solid var(--accent); padding-bottom: 10px; text-transform: uppercase; }
-        
-        .controls {
-            background: var(--ui);
+        h1 {
+            color: var(--cyan);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+            border-bottom: 1px solid var(--cyan);
+            padding-bottom: 10px;
+        }
+
+        .subtitle { font-size: 0.8rem; opacity: 0.7; margin-bottom: 20px; font-family: monospace; }
+
+        .control-group {
+            background: rgba(10, 26, 47, 0.9);
             padding: 15px;
-            border: 1px solid #333;
-            margin-bottom: 20px;
+            border: 1px solid #1e3a5f;
             display: flex;
-            gap: 10px;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
         }
 
         .viewport {
             position: relative;
-            border: 2px solid #333;
-            display: none; /* Hidden until load */
+            border: 2px solid var(--cyan);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.15);
             background: #000;
         }
 
         canvas { display: block; max-width: 100%; }
 
-        .stats-grid {
-            margin-top: 20px;
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            width: 100%;
-            max-width: 600px;
+        /* The Laser Scanner Line */
+        .scan-bar {
+            position: absolute;
+            top: 0; bottom: 0; width: 2px;
+            background: var(--cyan);
+            box-shadow: 0 0 15px var(--cyan);
+            left: 0%;
+            display: none;
+            pointer-events: none;
         }
 
-        .stat-box {
-            background: var(--ui);
-            padding: 15px;
-            border-left: 4px solid var(--accent);
+        .panel {
+            margin-top: 20px;
+            width: 100%; max-width: 800px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
         }
+
+        .metric {
+            background: rgba(10, 26, 47, 0.8);
+            border-left: 3px solid var(--cyan);
+            padding: 15px;
+        }
+
+        .metric-label { font-size: 0.75rem; color: #64ffda; margin-bottom: 5px; text-transform: uppercase; }
+        .metric-value { font-size: 1.2rem; font-weight: bold; color: white; }
 
         button {
-            background: var(--accent); color: white; border: none; padding: 10px 20px;
-            font-weight: bold; cursor: pointer; text-transform: uppercase;
+            background: transparent;
+            color: var(--cyan);
+            border: 1px solid var(--cyan);
+            padding: 8px 20px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-family: monospace;
+            transition: all 0.2s;
         }
-        button:hover { opacity: 0.8; }
+        button:hover { background: rgba(0, 243, 255, 0.1); box-shadow: 0 0 10px rgba(0, 243, 255, 0.2); }
+
     </style>
 </head>
 <body>
 
-    <h1>Radial Sonar Scanner</h1>
-    <div style="font-size: 0.8em; color: #888; margin-bottom: 15px;">ALGORITHM: CENTROID_RAYCASTING // SINGLE_LOOP_TOPOLOGY</div>
+    <h1>Vertical Integral Scanner</h1>
+    <div class="subtitle">METHOD: RIEMANN_SUMMATION // CONTINUOUS_PROFILE</div>
 
-    <div class="controls">
-        <input type="file" id="imageInput" accept="image/*">
-        <button onclick="engageSonar()">Initiate Scan</button>
+    <div class="control-group">
+        <input type="file" id="imageInput" accept="image/*" style="color: white;">
+        <button onclick="startScan()">Execute Scan</button>
     </div>
 
-    <div class="viewport" id="viewport">
+    <div class="viewport" id="viewport" style="display:none;">
         <canvas id="mainCanvas"></canvas>
+        <div class="scan-bar" id="scanBar"></div>
     </div>
 
-    <div class="stats-grid" id="stats"></div>
+    <div class="panel" id="results"></div>
 
     <script>
         const fileInput = document.getElementById('imageInput');
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const scanBar = document.getElementById('scanBar');
+        const resultsDiv = document.getElementById('results');
         const viewport = document.getElementById('viewport');
-        const statsDiv = document.getElementById('stats');
 
         let originalImage = null;
+        let isScanning = false;
 
         fileInput.addEventListener('change', (e) => {
             if(e.target.files[0]) {
@@ -110,180 +148,208 @@
             viewport.style.display = 'block';
             let w = img.width;
             let h = img.height;
-            const max = 600; 
+            const max = 800;
             if (w > max || h > max) {
                 const r = Math.min(max/w, max/h);
                 w *= r; h *= r;
             }
             canvas.width = w;
             canvas.height = h;
+            // Draw dimmed initial state
+            ctx.filter = 'grayscale(100%) brightness(40%)';
             ctx.drawImage(img, 0, 0, w, h);
-            statsDiv.innerHTML = '';
+            ctx.filter = 'none';
+            resultsDiv.innerHTML = '';
+            scanBar.style.display = 'none';
         }
 
-        // --- CORE ALGORITHM: RADIAL RAYCAST ---
-        function engageSonar() {
-            if (!originalImage) return;
-
-            const w = canvas.width;
-            const h = canvas.height;
-            const data = ctx.getImageData(0, 0, w, h).data;
-
-            // 1. FIND CENTROID (Center of Mass)
-            // We sum up all X and Y coordinates of skin pixels
-            let sumX = 0, sumY = 0, count = 0;
-            const step = 4; // Optimization skip
-
-            for (let y = 0; y < h; y += step) {
-                for (let x = 0; x < w; x += step) {
-                    const i = (y * w + x) * 4;
-                    // Simple Skin Filter
-                    if (data[i] > 60 && data[i+1] > 40 && data[i+2] > 20 && 
-                        data[i] > data[i+1] && data[i] > data[i+2]) {
-                        sumX += x;
-                        sumY += y;
-                        count++;
-                    }
-                }
-            }
-
-            if (count < 100) { alert("No subject detected."); return; }
-
-            const centerX = sumX / count;
-            const centerY = sumY / count;
-
-            // 2. CAST RAYS (360 degrees)
-            const numRays = 180; // Resolution of the outline
-            const outlinePoints = [];
-            const maxDist = Math.max(w, h) / 1.5;
-
-            // Get the "Reference Color" from the center (assumed to be skin/face)
-            const cIdx = (Math.floor(centerY) * w + Math.floor(centerX)) * 4;
-            const refR = data[cIdx], refG = data[cIdx+1], refB = data[cIdx+2];
-
-            for (let i = 0; i < numRays; i++) {
-                const angle = (i / numRays) * (Math.PI * 2);
-                const dx = Math.cos(angle);
-                const dy = Math.sin(angle);
-
-                let hitX = centerX;
-                let hitY = centerY;
-
-                // March the ray
-                for (let dist = 10; dist < maxDist; dist += 5) {
-                    const tx = Math.floor(centerX + dx * dist);
-                    const ty = Math.floor(centerY + dy * dist);
-
-                    // Boundary Check
-                    if (tx < 0 || tx >= w || ty < 0 || ty >= h) {
-                        hitX = tx; hitY = ty;
-                        break;
-                    }
-
-                    // Color Check
-                    const idx = (ty * w + tx) * 4;
-                    const r = data[idx], g = data[idx+1], b = data[idx+2];
-
-                    // DIFFERENCE CALCULATION
-                    // If pixel is too different from skin reference, we hit the edge
-                    const diff = Math.abs(r - refR) + Math.abs(g - refG) + Math.abs(b - refB);
-                    
-                    // Threshold: If color shifts by > 100 units total, stop.
-                    // Also stop if it's very dark (background)
-                    if (diff > 100 || (r+g+b) < 50) {
-                        hitX = tx;
-                        hitY = ty;
-                        break; 
-                    }
-                    
-                    hitX = tx; hitY = ty; // Update last valid position
-                }
-                outlinePoints.push({x: hitX, y: hitY});
-            }
-
-            // 3. DRAW
-            drawSonarView(centerX, centerY, outlinePoints);
-            generateReport(count, outlinePoints);
-        }
-
-        function drawSonarView(cx, cy, points) {
-            // Dim Background
-            ctx.fillStyle = "rgba(0,0,0,0.8)";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Draw Center Target
-            ctx.beginPath();
-            ctx.arc(cx, cy, 5, 0, Math.PI*2);
-            ctx.fillStyle = "#ff0055";
-            ctx.fill();
-
-            // Draw The Loop
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, points[0].y);
+        // --- THE SCAN LOGIC ---
+        function startScan() {
+            if (!originalImage || isScanning) return;
+            isScanning = true;
             
-            // Smoothing: Quadratic Curve for organic look
-            for (let i = 1; i < points.length; i++) {
-                const p = points[i];
-                // simple line to
-                ctx.lineTo(p.x, p.y);
-            }
-            ctx.closePath();
+            // 1. Get Data
+            // Draw clear image to temp canvas to read pixel data
+            const tempC = document.createElement('canvas');
+            tempC.width = canvas.width; tempC.height = canvas.height;
+            const tCtx = tempC.getContext('2d');
+            tCtx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
+            const data = tCtx.getImageData(0, 0, canvas.width, canvas.height).data;
 
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = "#ff0055";
-            ctx.shadowColor = "#ff0055";
-            ctx.shadowBlur = 15;
-            ctx.stroke();
-            ctx.shadowBlur = 0;
+            // 2. Prepare Arrays for Upper/Lower Bounds
+            const width = canvas.width;
+            const height = canvas.height;
+            let upperProfile = new Array(width).fill(height);
+            let lowerProfile = new Array(width).fill(0);
+            let totalMass = 0;
 
-            // Draw Rays (Low opacity)
-            ctx.beginPath();
-            points.forEach((p, idx) => {
-                if (idx % 5 === 0) { // Draw every 5th ray
-                    ctx.moveTo(cx, cy);
-                    ctx.lineTo(p.x, p.y);
+            // 3. Scan Animation Loop
+            let x = 0;
+            const step = 4; // Scan speed (pixels per frame block)
+            scanBar.style.display = 'block';
+
+            function scanFrame() {
+                // Process a chunk of columns
+                for (let k = 0; k < 15; k++) { 
+                    if (x >= width) break;
+
+                    // VERTICAL INTEGRATION for column x
+                    let yTop = -1;
+                    let yBottom = -1;
+                    let columnMass = 0;
+
+                    for (let y = 0; y < height; y += 2) {
+                        const i = (y * width + x) * 4;
+                        // Skin Filter
+                        const r = data[i], g = data[i+1], b = data[i+2];
+                        // R > G > B dominance check
+                        if (r > 60 && g > 40 && b > 20 && r > g && r > b && (r-g)>10) {
+                            if (yTop === -1) yTop = y; // First hit
+                            yBottom = y; // Update last hit
+                            columnMass++;
+                        }
+                    }
+
+                    // Store profile data
+                    if (yTop !== -1) {
+                        upperProfile[x] = yTop;
+                        lowerProfile[x] = yBottom;
+                        totalMass += columnMass;
+                    } else {
+                        // If empty column, maintain previous or baseline
+                        upperProfile[x] = height; 
+                        lowerProfile[x] = height;
+                    }
+                    
+                    x++;
                 }
-            });
-            ctx.strokeStyle = "rgba(255, 0, 85, 0.1)";
-            ctx.lineWidth = 1;
-            ctx.stroke();
+
+                // Update Visuals (Draw the Green "Detected" Area so far)
+                // We redraw the image column by column in "Color" where scanned
+                if (x > 0) {
+                     // Slice width
+                    const sliceW = 15 * step; // approx
+                    // We just draw the "result" lines up to x
+                    drawProfile(upperProfile, lowerProfile, x);
+                }
+
+                // Move Scan Bar
+                scanBar.style.left = (x / width * 100) + '%';
+
+                if (x < width) {
+                    requestAnimationFrame(scanFrame);
+                } else {
+                    isScanning = false;
+                    scanBar.style.display = 'none';
+                    finalizeReport(totalMass, width, height, upperProfile, lowerProfile);
+                }
+            }
+            
+            scanFrame();
         }
 
-        function generateReport(mass, points) {
-            // Calculate Area approx (Polygon)
-            let area = 0;
-            for (let i = 0; i < points.length; i++) {
-                let j = (i + 1) % points.length;
-                area += points[i].x * points[j].y;
-                area -= points[j].x * points[i].y;
-            }
-            area = Math.abs(area / 2);
+        // --- DRAWING THE ENVELOPE ---
+        function drawProfile(upper, lower, currentX) {
+            // Clear and redraw background (dimmed)
+            ctx.globalCompositeOperation = 'source-over';
+            
+            // Only redraw the profile line on top
+            // To make it efficient, we just draw the lines
+            
+            ctx.beginPath();
+            ctx.strokeStyle = '#00f3ff';
+            ctx.lineWidth = 2;
 
-            const seed = Math.floor(area);
-            const tiers = ["LTN", "MTN", "HTN", "CHADLITE", "CHAD"];
-            const tier = tiers[seed % 5];
+            // Draw Upper Bound
+            let started = false;
+            for(let i=0; i<currentX; i+=2) {
+                if (upper[i] < canvas.height - 10) { // If valid data
+                    if (!started) { ctx.moveTo(i, upper[i]); started = true; }
+                    else ctx.lineTo(i, upper[i]);
+                }
+            }
+            ctx.stroke();
+
+            // Draw Lower Bound
+            ctx.beginPath();
+            started = false;
+            for(let i=0; i<currentX; i+=2) {
+                if (lower[i] > 10 && lower[i] < canvas.height) { // If valid data
+                    if (!started) { ctx.moveTo(i, lower[i]); started = true; }
+                    else ctx.lineTo(i, lower[i]);
+                }
+            }
+            ctx.stroke();
+
+            // Fill the inside with a low-opacity scan effect
+            // (Simulate "integral area")
+            // This requires creating a shape
+            ctx.beginPath();
+            ctx.fillStyle = "rgba(0, 243, 255, 0.1)";
+            let first = true;
+            // Trace Top
+            for(let i=0; i<currentX; i+=5) {
+                if (upper[i] < canvas.height) {
+                    if (first) { ctx.moveTo(i, upper[i]); first=false; }
+                    else ctx.lineTo(i, upper[i]);
+                }
+            }
+            // Trace Bottom (Backwards)
+            for(let i=currentX-1; i>=0; i-=5) {
+                if (lower[i] < canvas.height) {
+                    ctx.lineTo(i, lower[i]);
+                }
+            }
+            ctx.fill();
+        }
+
+        // --- CALCULUS REPORTING ---
+        function finalizeReport(mass, w, h, upper, lower) {
+            // 1. Calculate Integral Area
+            // Mass is effectively the Riemann Sum of (Lower - Upper) * dx
+            
+            // 2. Determine "Mid-Scan" variance (Features)
+            let variance = 0;
+            let count = 0;
+            for(let i=0; i<w-1; i++) {
+                if (upper[i] < h && upper[i+1] < h) {
+                    variance += Math.abs(upper[i] - upper[i+1]); // Derivative (Slope)
+                    count++;
+                }
+            }
+            const smoothness = count > 0 ? (100 - (variance/count * 10)) : 0;
+            
+            // 3. Generate Classification
+            // A "Chad" implies strong, broad features (low variance in upper shoulder line)
+            // A "Normie" might have more noise or narrower integration area
+            
+            const score = (mass / (w*h/3)) * 100; // % of frame filled
+            let tier = "LTN";
+            if (smoothness > 80) tier = "MTN";
+            if (smoothness > 85 && score > 20) tier = "HTN";
+            if (smoothness > 90 && score > 25) tier = "CHAD";
 
             const html = `
-                <div class="stat-box">
-                    <div style="font-size:0.8rem; color:#888;">TARGET MASS</div>
-                    <div style="font-size:1.2rem; font-weight:bold;">${Math.floor(area/100)} kpx</div>
+                <div class="metric">
+                    <div class="metric-label">Integral Area</div>
+                    <div class="metric-value">${Math.floor(mass)} px²</div>
                 </div>
-                <div class="stat-box">
-                    <div style="font-size:0.8rem; color:#888;">SYMMETRY INDEX</div>
-                    <div style="font-size:1.2rem; font-weight:bold;">${(80 + seed%15)}%</div>
+                <div class="metric">
+                    <div class="metric-label">Profile Smoothness</div>
+                    <div class="metric-value">${smoothness.toFixed(1)}%</div>
                 </div>
-                <div class="stat-box">
-                    <div style="font-size:0.8rem; color:#888;">CLASSIFICATION</div>
-                    <div style="font-size:1.2rem; font-weight:bold; color:var(--accent);">${tier}</div>
+                <div class="metric">
+                    <div class="metric-label">Calculated Tier</div>
+                    <div class="metric-value" style="color:var(--cyan);">${tier}</div>
                 </div>
-                <div class="stat-box">
-                    <div style="font-size:0.8rem; color:#888;">SCAN VECTORS</div>
-                    <div style="font-size:1.2rem; font-weight:bold;">180</div>
+                <div class="metric">
+                    <div class="metric-label">Scan Width</div>
+                    <div class="metric-value">${w} px</div>
                 </div>
             `;
-            statsDiv.innerHTML = html;
+            resultsDiv.innerHTML = html;
         }
-
     </script>
 </body>
 </html>
+
