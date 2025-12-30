@@ -1,20 +1,20 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Algorithmic Face Detection (No ML)</title>
+    <title>Biometric Analysis System (Fixed)</title>
     <style>
         :root {
             --primary: #0f172a;
             --accent: #3b82f6;
             --bg: #f1f5f9;
             --card: #ffffff;
+            --success: #10b981;
         }
 
         body {
-            font-family: 'Courier New', monospace; /* Technical aesthetic */
+            font-family: 'Courier New', monospace;
             background-color: var(--bg);
             color: var(--primary);
             margin: 0;
@@ -24,7 +24,7 @@
             align-items: center;
         }
 
-        h1 { margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        h1 { margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--primary); padding-bottom: 5px; }
         .subtitle { font-size: 0.8rem; color: #64748b; margin-bottom: 20px; }
 
         .control-panel {
@@ -32,23 +32,22 @@
             border: 1px solid #cbd5e1;
             padding: 15px;
             margin-bottom: 20px;
-            box-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+            box-shadow: 4px 4px 0px rgba(0,0,0,0.1);
             display: flex;
             gap: 10px;
             align-items: center;
         }
 
-        /* The container for the image and the analysis overlay */
+        /* Viewport acts as the container for our visual analysis */
         .viewport {
             position: relative;
             border: 2px solid var(--primary);
             background: #000;
             margin-bottom: 20px;
-            display: inline-block;
-            line-height: 0; /* Removes gap below canvas */
+            display: none; /* Hidden until image loads */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         }
 
-        /* We use two canvases: one for the image data, one for drawing the UI overlay */
         canvas {
             display: block;
             max-width: 100%;
@@ -67,32 +66,35 @@
             border: 1px solid var(--primary);
             padding: 15px;
             position: relative;
+            animation: fadeIn 0.3s ease-out;
         }
 
         .report-card::before {
             content: '';
             position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 4px;
+            top: 0; left: 0; bottom: 0;
+            width: 4px;
             background: var(--accent);
         }
 
         .stat {
             display: flex;
             justify-content: space-between;
-            margin: 5px 0;
+            margin: 8px 0;
             border-bottom: 1px dashed #e2e8f0;
             padding-bottom: 2px;
+            font-size: 0.9rem;
         }
 
         button {
             background: var(--primary);
             color: white;
             border: none;
-            padding: 8px 16px;
+            padding: 10px 20px;
             cursor: pointer;
             font-family: inherit;
             font-weight: bold;
+            text-transform: uppercase;
         }
         button:hover { background: var(--accent); }
         
@@ -101,20 +103,26 @@
             color: #64748b;
             margin-top: 10px;
             white-space: pre-wrap;
+            font-weight: bold;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
 <body>
 
     <h1>Biometric Analysis System</h1>
-    <div class="subtitle">ALGORITHM: RGB_SKIN_SEGMENTATION // CLUSTERING_V1</div>
+    <div class="subtitle">ALGORITHM: RGB_SKIN_SEGMENTATION // NON_MAX_SUPPRESSION</div>
 
     <div class="control-panel">
         <input type="file" id="imageInput" accept="image/*">
         <button onclick="processImage()">EXECUTE SCAN</button>
     </div>
 
-    <div class="viewport" id="viewport" style="display:none;">
+    <div class="viewport" id="viewport">
         <canvas id="mainCanvas"></canvas>
     </div>
 
@@ -132,7 +140,7 @@
 
         let originalImage = null;
 
-        // 1. Load Image
+        // 1. Image Loading Logic
         fileInput.addEventListener('change', (e) => {
             if(e.target.files && e.target.files[0]) {
                 const reader = new FileReader();
@@ -141,7 +149,7 @@
                     img.onload = () => {
                         originalImage = img;
                         renderImage(img);
-                        log("Image loaded into memory buffer.");
+                        log("Image buffer loaded. Ready for scan.");
                     };
                     img.src = event.target.result;
                 };
@@ -151,9 +159,9 @@
 
         function renderImage(img) {
             viewport.style.display = 'block';
-            // Limit size for performance (scan speed)
             let width = img.width;
             let height = img.height;
+            // Downscale massive images for performance
             const maxSize = 800; 
             
             if (width > maxSize || height > maxSize) {
@@ -165,146 +173,164 @@
             canvas.width = width;
             canvas.height = height;
             ctx.drawImage(img, 0, 0, width, height);
-            reportGrid.innerHTML = '';
+            reportGrid.innerHTML = ''; // Clear old reports
         }
 
         function log(msg) {
             statusLog.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
         }
 
-        // 2. MAIN EXECUTION FUNCTION
+        // 2. CORE PROCESSING (The Fix)
         function processImage() {
             if (!originalImage) {
-                log("ERROR: No image buffer found.");
+                log("ERROR: No image loaded.");
                 return;
             }
 
-            log("Scanning pixel data...");
+            log("Phase 1: Density Scanning...");
             
-            // Get raw pixel data
             const width = canvas.width;
             const height = canvas.height;
             const imageData = ctx.getImageData(0, 0, width, height);
             const data = imageData.data;
 
-            // Detection Parameters
-            const faces = [];
-            const scanStep = 10; // Skip pixels to speed up (Performance optimization)
-            const boxSize = 60;  // Size of the sliding window (Approx face size)
-            const densityThreshold = 0.35; // 35% of pixels in box must be skin
+            let candidates = [];
+            
+            // --- PARAMETERS ---
+            const boxSize = 50;  // Size of the scanning window
+            const step = 10;     // How many pixels to jump (smaller = slower but more precise)
+            const minDensity = 0.30; // 30% of pixels in box must be skin
 
-            // Create a "visited" map to prevent overlapping circles
-            const visited = new Uint8Array(width * height);
-
-            // A. Sliding Window Algorithm
-            for (let y = 0; y < height - boxSize; y += scanStep) {
-                for (let x = 0; x < width - boxSize; x += scanStep) {
+            // A. Sliding Window Scan
+            for (let y = 0; y < height - boxSize; y += step) {
+                for (let x = 0; x < width - boxSize; x += step) {
                     
-                    // Optimization: Check if this area is already claimed
-                    if (visited[y * width + x] === 1) continue;
-
-                    // Count skin pixels in this box
-                    let skinCount = 0;
+                    let skinPixels = 0;
                     let totalPixels = 0;
 
-                    for (let by = 0; by < boxSize; by+=4) { // coarse check inside box
-                        for (let bx = 0; bx < boxSize; bx+=4) {
+                    // Check pixels inside this box (skip every few pixels for speed)
+                    for (let by = 0; by < boxSize; by += 4) {
+                        for (let bx = 0; bx < boxSize; bx += 4) {
                             const px = x + bx;
                             const py = y + by;
-                            const index = (py * width + px) * 4;
+                            const idx = (py * width + px) * 4;
                             
-                            const r = data[index];
-                            const g = data[index + 1];
-                            const b = data[index + 2];
+                            const r = data[idx];
+                            const g = data[idx+1];
+                            const b = data[idx+2];
 
                             if (isSkin(r, g, b)) {
-                                skinCount++;
+                                skinPixels++;
                             }
                             totalPixels++;
                         }
                     }
 
-                    // B. Threshold Check
-                    if ((skinCount / totalPixels) > densityThreshold) {
-                        // FOUND A FACE CANDIDATE
-                        
-                        // Refine Center
-                        const centerX = x + (boxSize / 2);
-                        const centerY = y + (boxSize / 2);
-
-                        faces.push({ x: centerX, y: centerY });
-
-                        // Mark area as visited (suppression) to stop multiple circles on one face
-                        for (let vy = y; vy < y + boxSize + 20; vy++) {
-                            for (let vx = x; vx < x + boxSize + 20; vx++) {
-                                if (vx < width && vy < height) {
-                                    visited[vy * width + vx] = 1;
-                                }
-                            }
-                        }
+                    const density = skinPixels / totalPixels;
+                    
+                    if (density > minDensity) {
+                        // Store this as a candidate. 
+                        // Note: We haven't drawn anything yet. just collecting data.
+                        candidates.push({
+                            x: x + boxSize/2, // Store center X
+                            y: y + boxSize/2, // Store center Y
+                            score: density    // Higher density = better face candidate
+                        });
                     }
                 }
             }
 
-            log(`Scan Complete. ${faces.length} region(s) of interest detected.`);
-            drawResults(faces);
+            log(`Phase 1 Complete. ${candidates.length} raw hits found. Performing Non-Maximum Suppression...`);
+
+            // B. Non-Maximum Suppression (The Anti-Swarm Logic)
+            
+            // 1. Sort candidates so the "best" faces (highest skin density) are first
+            candidates.sort((a, b) => b.score - a.score);
+
+            const finalFaces = [];
+            const mergeDistance = boxSize * 0.8; // If circles are closer than this, merge them.
+
+            while (candidates.length > 0) {
+                // Take the best remaining candidate
+                const best = candidates.shift();
+                finalFaces.push(best);
+
+                // Remove anyone else who is too close to this winner
+                candidates = candidates.filter(c => {
+                    const dist = Math.sqrt( Math.pow(c.x - best.x, 2) + Math.pow(c.y - best.y, 2) );
+                    return dist > mergeDistance; // Keep only the far away ones
+                });
+            }
+
+            log(`Scan Complete. ${finalFaces.length} distinct subjects identified.`);
+            drawResults(finalFaces);
         }
 
-        // 3. THE "MATH" (Skin Tone Logic)
-        // Checks if a pixel falls within human skin tone ranges (RGB logic)
+        // C. Skin Tone Math (RGB Thresholds)
         function isSkin(r, g, b) {
-            // Standard algorthimic threshold for skin detection in RGB space
-            return (r > 95) && (g > 40) && (b > 20) &&
-                   ((Math.max(r, g, b) - Math.min(r, g, b)) > 15) &&
-                   (Math.abs(r - g) > 15) &&
-                   (r > g) && (r > b);
+            // This checks if the pixel is generally "skin-colored"
+            // Works for light to dark skin by focusing on Red dominance and channel variance
+            return (r > 60) && (g > 40) && (b > 20) &&
+                   (r > g) && (r > b) &&
+                   (Math.abs(r - g) > 10) &&
+                   (r - g < 90);
         }
 
-        // 4. DRAWING & REPORTING
+        // 3. VISUALIZATION & REPORTING
         function drawResults(faces) {
-            // Redraw image to clear previous
+            // Redraw original clean image
             ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
             reportGrid.innerHTML = '';
 
             faces.forEach((face, index) => {
                 const id = index + 1;
-                
+
                 // Draw Circle
                 ctx.beginPath();
                 ctx.arc(face.x, face.y, 40, 0, 2 * Math.PI);
                 ctx.lineWidth = 3;
-                ctx.strokeStyle = '#00ff00'; // Matrix green
+                ctx.strokeStyle = '#00ff00'; // Matrix Green
+                ctx.shadowColor = "rgba(0, 255, 0, 0.5)";
+                ctx.shadowBlur = 10;
                 ctx.stroke();
+                ctx.shadowBlur = 0; // Reset
 
-                // Draw Label
+                // Draw ID Label
                 ctx.fillStyle = '#00ff00';
-                ctx.font = 'bold 16px monospace';
+                ctx.font = 'bold 16px Courier New';
                 ctx.fillText(`ID_${id}`, face.x + 45, face.y);
 
-                // Generate Report
                 generateReport(id, face.x, face.y);
             });
         }
 
         function generateReport(id, x, y) {
-            // Deterministic hashing based on coordinates for the text
-            const seed = Math.floor(x * y + x);
+            // Deterministic Generation: Same coordinates always = Same stats
+            const seed = Math.floor(x * y + x + y);
             
             const tiers = ["Average", "Above Average", "High Tier", "Exceptional", "Model Tier"];
             const tier = tiers[seed % tiers.length];
             
-            const eyeArea = ["Neutral Canthal Tilt", "Positive Canthal Tilt", "High Compactness", "Deep Set"];
-            const eye = eyeArea[seed % eyeArea.length];
+            const features = [
+                "Neutral Canthal Tilt", 
+                "Positive Canthal Tilt", 
+                "High Compactness", 
+                "Deep Set Eyes",
+                "Strong Jawline Projection"
+            ];
+            const feat = features[seed % features.length];
+
+            const harmony = 60 + (seed % 35); // 60-95%
 
             const html = `
                 <div class="report-card">
-                    <div class="stat"><strong>SUBJECT ID:</strong> <span>00${id}</span></div>
-                    <div class="stat"><strong>COORD:</strong> <span>${Math.floor(x)}, ${Math.floor(y)}</span></div>
+                    <div class="stat" style="color:var(--accent); font-weight:bold;">SUBJECT ID: 00${id}</div>
+                    <div class="stat"><strong>COORDINATES:</strong> <span>${Math.floor(x)}, ${Math.floor(y)}</span></div>
                     <div class="stat"><strong>CLASSIFICATION:</strong> <span>${tier}</span></div>
-                    <div class="stat"><strong>EYE AREA:</strong> <span>${eye}</span></div>
-                    <div class="stat"><strong>JAWLINE:</strong> <span>${(seed % 10) + 1}/10</span></div>
-                    <div style="margin-top:10px; font-size: 0.8rem; color: #555;">
-                        Analyzed via pixel-density clustering algorithms.
+                    <div class="stat"><strong>KEY FEATURE:</strong> <span>${feat}</span></div>
+                    <div class="stat"><strong>HARMONY SCORE:</strong> <span>${harmony}%</span></div>
+                    <div style="margin-top:10px; font-size: 0.7rem; color: #64748b;">
+                        Detection Confidence: ${(0.85 + (seed % 100)/1000).toFixed(2)}
                     </div>
                 </div>
             `;
@@ -313,3 +339,4 @@
     </script>
 </body>
 </html>
+
