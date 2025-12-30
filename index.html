@@ -1,22 +1,27 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Biometric Analysis System (Fixed)</title>
+    <title>Full Body Biometric Scanner</title>
     <style>
         :root {
-            --primary: #0f172a;
-            --accent: #3b82f6;
-            --bg: #f1f5f9;
-            --card: #ffffff;
-            --success: #10b981;
+            --bg: #050505;
+            --grid: #1a1a1a;
+            --text: #00ff41; /* Hacker Green */
+            --highlight: #ffffff;
+            --alert: #ff3333;
         }
 
         body {
-            font-family: 'Courier New', monospace;
+            font-family: 'Consolas', 'Monaco', monospace;
             background-color: var(--bg);
-            color: var(--primary);
+            background-image: 
+                linear-gradient(var(--grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+            background-size: 30px 30px;
+            color: var(--text);
             margin: 0;
             padding: 20px;
             display: flex;
@@ -24,319 +29,342 @@
             align-items: center;
         }
 
-        h1 { margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--primary); padding-bottom: 5px; }
-        .subtitle { font-size: 0.8rem; color: #64748b; margin-bottom: 20px; }
+        h1 { 
+            text-transform: uppercase; 
+            letter-spacing: 4px; 
+            border: 1px solid var(--text); 
+            padding: 10px 30px;
+            margin-bottom: 5px;
+            background: rgba(0, 255, 65, 0.05);
+        }
+        
+        .subtitle { font-size: 0.7rem; opacity: 0.7; margin-bottom: 25px; }
 
-        .control-panel {
-            background: var(--card);
-            border: 1px solid #cbd5e1;
-            padding: 15px;
+        .controls {
             margin-bottom: 20px;
-            box-shadow: 4px 4px 0px rgba(0,0,0,0.1);
             display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        /* Viewport acts as the container for our visual analysis */
-        .viewport {
-            position: relative;
-            border: 2px solid var(--primary);
-            background: #000;
-            margin-bottom: 20px;
-            display: none; /* Hidden until image loads */
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        }
-
-        canvas {
-            display: block;
-            max-width: 100%;
-        }
-
-        .report-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 15px;
-            width: 100%;
-            max-width: 1000px;
         }
 
-        .report-card {
-            background: var(--card);
-            border: 1px solid var(--primary);
-            padding: 15px;
-            position: relative;
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        .report-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; bottom: 0;
-            width: 4px;
-            background: var(--accent);
-        }
-
-        .stat {
-            display: flex;
-            justify-content: space-between;
-            margin: 8px 0;
-            border-bottom: 1px dashed #e2e8f0;
-            padding-bottom: 2px;
-            font-size: 0.9rem;
+        input[type="file"] {
+            color: var(--text);
+            border: 1px solid var(--text);
+            padding: 10px;
         }
 
         button {
-            background: var(--primary);
-            color: white;
+            background: var(--text);
+            color: var(--bg);
             border: none;
-            padding: 10px 20px;
-            cursor: pointer;
+            padding: 10px 25px;
             font-family: inherit;
             font-weight: bold;
+            cursor: pointer;
             text-transform: uppercase;
         }
-        button:hover { background: var(--accent); }
-        
-        .status-log {
-            font-size: 0.75rem;
-            color: #64748b;
-            margin-top: 10px;
-            white-space: pre-wrap;
-            font-weight: bold;
+        button:hover { background: var(--highlight); }
+
+        .viewport-container {
+            position: relative;
+            border: 2px solid var(--text);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+            margin-bottom: 20px;
+            background: #000;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        canvas { display: block; max-width: 100%; }
+
+        .analysis-panel {
+            width: 100%;
+            max-width: 800px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .data-block {
+            border: 1px solid #333;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+        }
+
+        .block-title {
+            background: #111;
+            padding: 5px 10px;
+            margin: -15px -15px 15px -15px;
+            border-bottom: 1px solid #333;
+            font-weight: bold;
+            color: var(--highlight);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            border-bottom: 1px dotted #333;
+        }
+
+        .tier-tag {
+            font-weight: bold;
+            padding: 2px 6px;
+            background: #111;
+            border: 1px solid var(--text);
         }
     </style>
 </head>
 <body>
 
-    <h1>Biometric Analysis System</h1>
-    <div class="subtitle">ALGORITHM: RGB_SKIN_SEGMENTATION // NON_MAX_SUPPRESSION</div>
+    <h1>Anthropometric Scanner</h1>
+    <div class="subtitle">SYSTEM: ANATOMICAL_PROJECTION_V4 // NO_ML_CORE</div>
 
-    <div class="control-panel">
+    <div class="controls">
         <input type="file" id="imageInput" accept="image/*">
-        <button onclick="processImage()">EXECUTE SCAN</button>
+        <button onclick="executeFullScan()">Initiate Sequence</button>
     </div>
 
-    <div class="viewport" id="viewport">
+    <div class="viewport-container" id="viewport" style="display:none;">
         <canvas id="mainCanvas"></canvas>
     </div>
 
-    <div class="status-log" id="statusLog">System Idle. Waiting for input...</div>
-
-    <div class="report-grid" id="reportGrid"></div>
+    <div class="analysis-panel" id="resultsArea"></div>
 
     <script>
         const fileInput = document.getElementById('imageInput');
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const reportGrid = document.getElementById('reportGrid');
-        const statusLog = document.getElementById('statusLog');
+        const resultsArea = document.getElementById('resultsArea');
         const viewport = document.getElementById('viewport');
 
         let originalImage = null;
 
-        // 1. Image Loading Logic
+        // --- 1. IMAGE LOADER ---
         fileInput.addEventListener('change', (e) => {
-            if(e.target.files && e.target.files[0]) {
+            if(e.target.files[0]) {
                 const reader = new FileReader();
-                reader.onload = (event) => {
+                reader.onload = (evt) => {
                     const img = new Image();
                     img.onload = () => {
                         originalImage = img;
-                        renderImage(img);
-                        log("Image buffer loaded. Ready for scan.");
+                        renderPreview(img);
                     };
-                    img.src = event.target.result;
+                    img.src = evt.target.result;
                 };
                 reader.readAsDataURL(e.target.files[0]);
             }
         });
 
-        function renderImage(img) {
+        function renderPreview(img) {
             viewport.style.display = 'block';
-            let width = img.width;
-            let height = img.height;
-            // Downscale massive images for performance
-            const maxSize = 800; 
-            
-            if (width > maxSize || height > maxSize) {
-                const ratio = Math.min(maxSize / width, maxSize / height);
-                width *= ratio;
-                height *= ratio;
+            let w = img.width;
+            let h = img.height;
+            const max = 800;
+            if (w > max || h > max) {
+                const r = Math.min(max/w, max/h);
+                w *= r; h *= r;
             }
-
-            canvas.width = width;
-            canvas.height = height;
-            ctx.drawImage(img, 0, 0, width, height);
-            reportGrid.innerHTML = ''; // Clear old reports
+            canvas.width = w;
+            canvas.height = h;
+            ctx.drawImage(img, 0, 0, w, h);
+            resultsArea.innerHTML = '';
         }
 
-        function log(msg) {
-            statusLog.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-        }
+        // --- 2. THE SCANNING ENGINE ---
+        function executeFullScan() {
+            if (!originalImage) return;
 
-        // 2. CORE PROCESSING (The Fix)
-        function processImage() {
-            if (!originalImage) {
-                log("ERROR: No image loaded.");
+            // Step A: Find the Face (Anchor Point)
+            const faces = detectFaces();
+
+            if (faces.length === 0) {
+                alert("No biological signatures detected.");
                 return;
             }
 
-            log("Phase 1: Density Scanning...");
-            
-            const width = canvas.width;
-            const height = canvas.height;
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
+            // Step B: Project the Body Matrix
+            const subjects = faces.map(face => inferBodyStructure(face));
 
+            // Step C: Draw & Report
+            drawWireframe(subjects);
+            generateDeepReport(subjects);
+        }
+
+        // Reuse the Skin/NMS Logic from before (It works best)
+        function detectFaces() {
+            const w = canvas.width;
+            const h = canvas.height;
+            const data = ctx.getImageData(0, 0, w, h).data;
             let candidates = [];
-            
-            // --- PARAMETERS ---
-            const boxSize = 50;  // Size of the scanning window
-            const step = 10;     // How many pixels to jump (smaller = slower but more precise)
-            const minDensity = 0.30; // 30% of pixels in box must be skin
+            const box = 50, step = 10;
 
-            // A. Sliding Window Scan
-            for (let y = 0; y < height - boxSize; y += step) {
-                for (let x = 0; x < width - boxSize; x += step) {
-                    
-                    let skinPixels = 0;
-                    let totalPixels = 0;
-
-                    // Check pixels inside this box (skip every few pixels for speed)
-                    for (let by = 0; by < boxSize; by += 4) {
-                        for (let bx = 0; bx < boxSize; bx += 4) {
-                            const px = x + bx;
-                            const py = y + by;
-                            const idx = (py * width + px) * 4;
-                            
-                            const r = data[idx];
-                            const g = data[idx+1];
-                            const b = data[idx+2];
-
-                            if (isSkin(r, g, b)) {
-                                skinPixels++;
-                            }
-                            totalPixels++;
+            for (let y = 0; y < h - box; y += step) {
+                for (let x = 0; x < w - box; x += step) {
+                    let skin = 0;
+                    for (let by = 0; by < box; by+=5) {
+                        for (let bx = 0; bx < box; bx+=5) {
+                            const i = ((y+by)*w + (x+bx))*4;
+                            if (isSkin(data[i], data[i+1], data[i+2])) skin++;
                         }
                     }
-
-                    const density = skinPixels / totalPixels;
-                    
-                    if (density > minDensity) {
-                        // Store this as a candidate. 
-                        // Note: We haven't drawn anything yet. just collecting data.
-                        candidates.push({
-                            x: x + boxSize/2, // Store center X
-                            y: y + boxSize/2, // Store center Y
-                            score: density    // Higher density = better face candidate
-                        });
-                    }
+                    if (skin/100 > 0.3) candidates.push({x:x+box/2, y:y+box/2, s:skin});
                 }
             }
 
-            log(`Phase 1 Complete. ${candidates.length} raw hits found. Performing Non-Maximum Suppression...`);
-
-            // B. Non-Maximum Suppression (The Anti-Swarm Logic)
-            
-            // 1. Sort candidates so the "best" faces (highest skin density) are first
-            candidates.sort((a, b) => b.score - a.score);
-
-            const finalFaces = [];
-            const mergeDistance = boxSize * 0.8; // If circles are closer than this, merge them.
-
-            while (candidates.length > 0) {
-                // Take the best remaining candidate
+            // NMS Sort & Clean
+            candidates.sort((a,b) => b.s - a.s);
+            const final = [];
+            while(candidates.length) {
                 const best = candidates.shift();
-                finalFaces.push(best);
-
-                // Remove anyone else who is too close to this winner
-                candidates = candidates.filter(c => {
-                    const dist = Math.sqrt( Math.pow(c.x - best.x, 2) + Math.pow(c.y - best.y, 2) );
-                    return dist > mergeDistance; // Keep only the far away ones
-                });
+                final.push(best);
+                candidates = candidates.filter(c => Math.hypot(c.x-best.x, c.y-best.y) > box);
             }
-
-            log(`Scan Complete. ${finalFaces.length} distinct subjects identified.`);
-            drawResults(finalFaces);
+            return final;
         }
 
-        // C. Skin Tone Math (RGB Thresholds)
-        function isSkin(r, g, b) {
-            // This checks if the pixel is generally "skin-colored"
-            // Works for light to dark skin by focusing on Red dominance and channel variance
-            return (r > 60) && (g > 40) && (b > 20) &&
-                   (r > g) && (r > b) &&
-                   (Math.abs(r - g) > 10) &&
-                   (r - g < 90);
+        function isSkin(r,g,b) {
+            return (r > 60 && g > 40 && b > 20 && r > g && r > b && Math.abs(r-g) > 10);
         }
 
-        // 3. VISUALIZATION & REPORTING
-        function drawResults(faces) {
-            // Redraw original clean image
-            ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
-            reportGrid.innerHTML = '';
+        // --- 3. ANTHROPOMETRIC PROJECTION (The "Point" Logic) ---
+        function inferBodyStructure(face) {
+            const cx = face.x;
+            const cy = face.y;
+            const unit = 40; // Approx head radius
 
-            faces.forEach((face, index) => {
-                const id = index + 1;
+            // We mathematically project where body parts SHOULD be
+            return {
+                id: Math.random().toString(36).substr(2, 5).toUpperCase(),
+                center: {x: cx, y: cy},
+                points: {
+                    glabella: {x: cx, y: cy - unit*0.2}, // Between eyes
+                    chin:     {x: cx, y: cy + unit},
+                    l_eye:    {x: cx - unit*0.4, y: cy - unit*0.3},
+                    r_eye:    {x: cx + unit*0.4, y: cy - unit*0.3},
+                    l_jaw:    {x: cx - unit*0.6, y: cy + unit*0.8},
+                    r_jaw:    {x: cx + unit*0.6, y: cy + unit*0.8},
+                    neck:     {x: cx, y: cy + unit*1.5},
+                    l_shldr:  {x: cx - unit*2.2, y: cy + unit*2.2},
+                    r_shldr:  {x: cx + unit*2.2, y: cy + unit*2.2},
+                    chest:    {x: cx, y: cy + unit*3.0}
+                }
+            };
+        }
 
-                // Draw Circle
+        // --- 4. VISUALIZATION (Wireframe) ---
+        function drawWireframe(subjects) {
+            ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height); // Clear
+            
+            subjects.forEach(sub => {
+                const p = sub.points;
+                
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#00ff41';
+                ctx.fillStyle = '#00ff41';
+
+                // Draw Connections (Skeleton)
                 ctx.beginPath();
-                ctx.arc(face.x, face.y, 40, 0, 2 * Math.PI);
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = '#00ff00'; // Matrix Green
-                ctx.shadowColor = "rgba(0, 255, 0, 0.5)";
-                ctx.shadowBlur = 10;
+                // Face Hexagon
+                ctx.moveTo(p.l_eye.x, p.l_eye.y);
+                ctx.lineTo(p.r_eye.x, p.r_eye.y);
+                ctx.lineTo(p.r_jaw.x, p.r_jaw.y);
+                ctx.lineTo(p.chin.x, p.chin.y);
+                ctx.lineTo(p.l_jaw.x, p.l_jaw.y);
+                ctx.closePath();
                 ctx.stroke();
-                ctx.shadowBlur = 0; // Reset
 
-                // Draw ID Label
-                ctx.fillStyle = '#00ff00';
-                ctx.font = 'bold 16px Courier New';
-                ctx.fillText(`ID_${id}`, face.x + 45, face.y);
+                // Body Lines
+                ctx.beginPath();
+                ctx.moveTo(p.chin.x, p.chin.y);
+                ctx.lineTo(p.neck.x, p.neck.y);
+                ctx.lineTo(p.chest.x, p.chest.y);
+                ctx.stroke();
 
-                generateReport(id, face.x, face.y);
+                ctx.beginPath();
+                ctx.moveTo(p.l_shldr.x, p.l_shldr.y);
+                ctx.lineTo(p.neck.x, p.neck.y);
+                ctx.lineTo(p.r_shldr.x, p.r_shldr.y);
+                ctx.stroke();
+
+                // Draw Dots
+                Object.values(p).forEach(pt => {
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, 3, 0, Math.PI*2);
+                    ctx.fill();
+                });
             });
         }
 
-        function generateReport(id, x, y) {
-            // Deterministic Generation: Same coordinates always = Same stats
-            const seed = Math.floor(x * y + x + y);
+        // --- 5. DETAILED REPORTING ---
+        function generateDeepReport(subjects) {
+            resultsArea.innerHTML = '';
             
-            const tiers = ["Average", "Above Average", "High Tier", "Exceptional", "Model Tier"];
-            const tier = tiers[seed % tiers.length];
-            
-            const features = [
-                "Neutral Canthal Tilt", 
-                "Positive Canthal Tilt", 
-                "High Compactness", 
-                "Deep Set Eyes",
-                "Strong Jawline Projection"
-            ];
-            const feat = features[seed % features.length];
+            subjects.forEach(sub => {
+                // Generate Deterministic Stats based on ID
+                const seed = sub.center.x * sub.center.y;
+                
+                // Tier Logic
+                const tiers = ["LTN", "MTN", "HTN", "CHADLITE", "CHAD"];
+                const mainTier = tiers[Math.floor(seed % 5)];
+                
+                // Specific Features
+                const jaw = ((seed % 100) / 10).toFixed(1);
+                const eyes = ((seed % 90) / 10).toFixed(1);
+                const sym = ((seed % 95) / 10 + 0.5).toFixed(1);
 
-            const harmony = 60 + (seed % 35); // 60-95%
+                const html = `
+                    <div class="data-block">
+                        <div class="block-title">SUBJECT: ${sub.id} // ${mainTier}</div>
+                        
+                        <div class="stat-row">
+                            <span>OVERALL TIER</span>
+                            <span class="tier-tag">${mainTier}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>FACIAL HARMONY</span>
+                            <span>${(60 + seed%40).toFixed(1)}%</span>
+                        </div>
+                        
+                        <br><strong>STRUCTURAL METRICS:</strong><br>
+                        
+                        <div class="stat-row">
+                            <span>Jawline Mass</span>
+                            <span>${jaw} / 10</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>Eye Area (PFL)</span>
+                            <span>${eyes} / 10</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>Midface Ratio</span>
+                            <span>0.${40 + Math.floor(seed%20)} (Compact)</span>
+                        </div>
+                         <div class="stat-row">
+                            <span>Biotragus Angle</span>
+                            <span>${100 + Math.floor(seed%30)}&deg;</span>
+                        </div>
 
-            const html = `
-                <div class="report-card">
-                    <div class="stat" style="color:var(--accent); font-weight:bold;">SUBJECT ID: 00${id}</div>
-                    <div class="stat"><strong>COORDINATES:</strong> <span>${Math.floor(x)}, ${Math.floor(y)}</span></div>
-                    <div class="stat"><strong>CLASSIFICATION:</strong> <span>${tier}</span></div>
-                    <div class="stat"><strong>KEY FEATURE:</strong> <span>${feat}</span></div>
-                    <div class="stat"><strong>HARMONY SCORE:</strong> <span>${harmony}%</span></div>
-                    <div style="margin-top:10px; font-size: 0.7rem; color: #64748b;">
-                        Detection Confidence: ${(0.85 + (seed % 100)/1000).toFixed(2)}
+                        <br><strong>ESTIMATED FLAWS:</strong><br>
+                        <div style="font-size:0.8rem; color:#888;">
+                            > ${getFlaw(seed)}<br>
+                            > ${getFlaw(seed+1)}
+                        </div>
                     </div>
-                </div>
-            `;
-            reportGrid.insertAdjacentHTML('beforeend', html);
+                `;
+                resultsArea.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        function getFlaw(seed) {
+            const flaws = [
+                "Upper Eyelid Exposure detected",
+                "Slight asymmetry in gonial angle",
+                "Philtrum length exceeds optimal ratio",
+                "Nasal tip projection deviations",
+                "Negative canthal tilt inferred",
+                "Brow ridge prominence low"
+            ];
+            return flaws[Math.floor(seed % flaws.length)];
         }
     </script>
 </body>
 </html>
-
